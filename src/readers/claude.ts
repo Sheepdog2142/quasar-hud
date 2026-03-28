@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { CLI_DIRS, DEFAULT_CONFIG, tokenLimitForModel, claudeWeeklyTokenLimit } from '../config';
+import { CLI_DIRS, DEFAULT_CONFIG, tokenLimitForModel, claudeWeeklyTokenLimit, computeCost } from '../config';
 import { readJson, readJsonLines, readGitBranch } from '../utils';
 import type { SessionData, MCPServer, ContextModeMCP, WeeklyUsage } from '../types';
 
@@ -163,12 +163,15 @@ export function readClaudeSession(): SessionData {
 
       const lines = readJsonLines<Record<string, unknown>>(path.join(projectDir, latestFile));
       let turnCount = 0;
-      // Track the most recent assistant turn's token usage.
-      // input_tokens on an assistant event = total context sent to the model on that turn,
-      // which is the best approximation of the current context window size.
+      // Last-turn tracking: input_tokens on the most recent assistant event ≈ current context window size.
       let lastInputTokens = 0;
       let lastOutputTokens = 0;
       let lastCacheReadTokens = 0;
+      // Cumulative tracking: used for session cost estimation.
+      let cumInputTokens = 0;
+      let cumOutputTokens = 0;
+      let cumCacheCreationTokens = 0;
+      let cumCacheReadTokens = 0;
       let model: string | undefined;
 
       for (const line of lines) {
@@ -178,18 +181,28 @@ export function readClaudeSession(): SessionData {
           if (msg?.['model'] && !model) model = String(msg['model']);
           const usage = msg?.['usage'] as Record<string, unknown> | undefined;
           if (usage) {
-            const inp = (usage['input_tokens'] as number ?? 0);
+            const inp        = (usage['input_tokens']                as number ?? 0);
+            const out        = (usage['output_tokens']               as number ?? 0);
+            const cacheWrite = (usage['cache_creation_input_tokens'] as number ?? 0);
+            const cacheRead  = (usage['cache_read_input_tokens']     as number ?? 0);
+
+            // Accumulate for cost
+            cumInputTokens        += inp;
+            cumOutputTokens       += out;
+            cumCacheCreationTokens += cacheWrite;
+            cumCacheReadTokens    += cacheRead;
+
+            // Track last turn for context-window bar
             if (inp > 0) {
-              lastInputTokens     = inp;
-              lastOutputTokens    = (usage['output_tokens'] as number ?? 0);
-              lastCacheReadTokens = (usage['cache_read_input_tokens'] as number ?? 0);
+              lastInputTokens    = inp;
+              lastOutputTokens   = out;
+              lastCacheReadTokens = cacheRead;
             }
           }
         }
       }
 
-      // Current context = what was sent to the model on the last turn (uncached + cached input)
-      // plus the output it generated (which is now also in context).
+      // Current context = what was sent to model on the last turn (cached + uncached input + output)
       const tokensUsed = lastInputTokens + lastCacheReadTokens + lastOutputTokens;
 
       base.turnCount = turnCount;
@@ -203,6 +216,15 @@ export function readClaudeSession(): SessionData {
           warnAt: DEFAULT_CONFIG.compactionWarnAt,
           compactAt: DEFAULT_CONFIG.compactionAutoAt,
         };
+      }
+
+      // Session cost estimate from cumulative token counts
+      if (cumInputTokens + cumOutputTokens > 0) {
+        base.costEstimate = computeCost(
+          cumInputTokens, cumOutputTokens,
+          cumCacheCreationTokens, cumCacheReadTokens,
+          base.model,
+        );
       }
     }
   } catch { /* non-fatal */ }

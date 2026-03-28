@@ -7,6 +7,7 @@ import MCPRow from './components/MCPRow';
 import SessionRow from './components/SessionRow';
 import RequestsBar from './components/RequestsBar';
 import WeeklyUsageBar from './components/WeeklyUsageBar';
+import CostRow from './components/CostRow';
 import type { SessionData, HUDConfig } from '../types';
 
 interface StatusBarProps {
@@ -56,7 +57,12 @@ const StatusBar: React.FC<StatusBarProps> = ({ data, config }) => {
         <WeeklyUsageBar weeklyUsage={data.weeklyUsage} />
       ) : null}
 
-      {/* Row 6 — MCP servers + context-mode */}
+      {/* Row 6 — Session cost estimate (Claude only; requires token breakdown) */}
+      {data.costEstimate ? (
+        <CostRow cost={data.costEstimate} color={identity.accentColor} />
+      ) : null}
+
+      {/* Row 7 — MCP servers + context-mode */}
       <MCPRow data={data} identity={identity} />
 
       {/* Notice / warning footer */}

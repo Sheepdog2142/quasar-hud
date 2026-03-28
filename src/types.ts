@@ -46,6 +46,23 @@ export interface WeeklyUsage {
   sessionsCount: number;
 }
 
+// ─── Cost estimation ──────────────────────────────────────────────────────────
+
+export interface CostEstimate {
+  /** Estimated total session cost in USD */
+  totalUsd: number;
+  /** Cumulative input tokens billed this session */
+  inputTokens: number;
+  /** Cumulative output tokens billed this session */
+  outputTokens: number;
+  /** Cumulative cache-creation tokens billed this session */
+  cacheCreationTokens: number;
+  /** Cumulative cache-read tokens billed this session */
+  cacheReadTokens: number;
+  /** Model string used to select pricing */
+  model: string;
+}
+
 // ─── Token & compaction ───────────────────────────────────────────────────────
 
 export interface TokenUsage {
@@ -99,6 +116,8 @@ export interface SessionData {
   lastUpdated: Date;
   /** How long the last readSession() call took in milliseconds */
   readTimeMs?: number;
+  /** Estimated session cost in USD (Claude only; requires token breakdown) */
+  costEstimate?: CostEstimate;
   /** Non-fatal warning or parse note for the HUD footer */
   notice?: string;
 }

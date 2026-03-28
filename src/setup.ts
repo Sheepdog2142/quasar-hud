@@ -77,10 +77,32 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// ─── Path escaping helpers ────────────────────────────────────────────────────
+
+/**
+ * Escape a file path for embedding inside a PowerShell double-quoted string.
+ * In PS, backtick is the escape char; backslashes are literal.
+ * The previous approach of doubling backslashes was incorrect.
+ */
+function psSafePath(p: string): string {
+  return p
+    .replace(/`/g, '``')   // backtick must be escaped first
+    .replace(/"/g, '`"')   // double-quote inside a double-quoted PS string
+    .replace(/\$/g, '`$'); // $ would trigger PS variable expansion
+}
+
+/**
+ * Wrap a path in single quotes for a POSIX shell, safely escaping any
+ * embedded single quotes via the '\'' idiom.
+ */
+function shSafePath(p: string): string {
+  return "'" + p.replace(/'/g, "'\\''") + "'";
+}
+
 // ─── Block generators ─────────────────────────────────────────────────────────
 
 function makePsBlock(cli: CLI): string {
-  const launchScript = LAUNCH_SCRIPTS[cli].replace(/\\/g, '\\\\');
+  const launchScript = psSafePath(LAUNCH_SCRIPTS[cli]);
   return [
     markerStart(cli),
     `function global:${cli} {`,
@@ -92,11 +114,11 @@ function makePsBlock(cli: CLI): string {
 }
 
 function makeShBlock(cli: CLI): string {
-  const launchSh = LAUNCH_SH.replace(/\\/g, '/');
+  const launchSh = shSafePath(LAUNCH_SH.replace(/\\/g, '/'));
   return [
     markerStart(cli),
     `${cli}() {`,
-    `    "${launchSh}" ${cli} "$@"`,
+    `    ${launchSh} ${cli} "$@"`,
     `}`,
     markerEnd(cli),
     '',

@@ -25,11 +25,31 @@ export function readJson<T = Record<string, unknown>>(filePath: string): T | nul
 
 // ─── JSONL ────────────────────────────────────────────────────────────────────
 
+/** Max bytes to read from a JSONL file. Files larger than this are tail-read
+ *  so we always get the most recent data without risking OOM on huge sessions. */
+const MAX_JSONL_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export function readJsonLines<T = Record<string, unknown>>(filePath: string): T[] {
   try {
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
+    let content: string;
+    const stat = fs.statSync(filePath);
+
+    if (stat.size > MAX_JSONL_BYTES) {
+      // Read only the tail of the file; the most recent events are at the end.
+      const fd = fs.openSync(filePath, 'r');
+      const buf = Buffer.allocUnsafe(MAX_JSONL_BYTES);
+      fs.readSync(fd, buf, 0, MAX_JSONL_BYTES, stat.size - MAX_JSONL_BYTES);
+      fs.closeSync(fd);
+      const raw = buf.toString('utf-8');
+      // Drop the first (likely partial) line so we only parse complete JSON objects.
+      const firstNewline = raw.indexOf('\n');
+      content = firstNewline >= 0 ? raw.slice(firstNewline + 1) : raw;
+    } else {
+      content = fs.readFileSync(filePath, 'utf-8');
+    }
+
     const results: T[] = [];
-    for (const line of lines) {
+    for (const line of content.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed) continue;
       try { results.push(JSON.parse(trimmed) as T); } catch { /* skip malformed */ }
