@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
 import * as chokidar from 'chokidar';
 import { readCopilotSession } from '../readers/copilot';
@@ -39,7 +39,7 @@ const App: React.FC<AppProps> = ({ config }) => {
     return { ...d, readTimeMs: Date.now() - t0 };
   });
   const [compact, setCompact] = useState(false);
-  const adaptiveInterval = useRef(config.refreshIntervalMs);
+  const [adaptiveInterval, setAdaptiveInterval] = useState(config.refreshIntervalMs);
   const identity = getIdentity(config.cli);
 
   const doRead = useCallback(() => {
@@ -60,15 +60,20 @@ const App: React.FC<AppProps> = ({ config }) => {
   // ── Adaptive polling (fallback refresh) ─────────────────────────────────────
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
+    let currentInterval = config.refreshIntervalMs;
     const tick = () => {
       const elapsed = doRead();
       const nominal = config.refreshIntervalMs;
-      adaptiveInterval.current = elapsed * 2 > nominal
+      const next = elapsed * 2 > nominal
         ? Math.max(nominal, elapsed * 3)
         : nominal;
-      timer = setTimeout(tick, adaptiveInterval.current);
+      if (next !== currentInterval) {
+        currentInterval = next;
+        setAdaptiveInterval(next);
+      }
+      timer = setTimeout(tick, currentInterval);
     };
-    timer = setTimeout(tick, adaptiveInterval.current);
+    timer = setTimeout(tick, currentInterval);
     return () => clearTimeout(timer);
   }, [config, doRead]);
 
@@ -83,7 +88,7 @@ const App: React.FC<AppProps> = ({ config }) => {
         depth:         2,
         awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 100 },
       });
-      watcher.on('change', doRead).on('add', doRead);
+      watcher.on('change', doRead).on('add', doRead).on('error', () => { /* swallow — polling continues */ });
       return () => { watcher.close(); };
     } catch {
       // chokidar unavailable (e.g. network drive restriction) — polling continues
@@ -98,7 +103,7 @@ const App: React.FC<AppProps> = ({ config }) => {
     ? `${readMs}ms  ·  r refresh  ·  c expand  ·  q quit`
     : [
         `Last refresh: ${data.lastUpdated.toLocaleTimeString()}  ·  ${readMs}ms read`,
-        isSlowRead ? `interval backed off to ${adaptiveInterval.current}ms` : null,
+        isSlowRead ? `interval backed off to ${adaptiveInterval}ms` : null,
         'r refresh  ·  c compact  ·  q quit',
       ].filter(Boolean).join('  ·  ');
 

@@ -10,6 +10,9 @@ interface CompactBarProps {
   readTimeMs?: number;
 }
 
+// Defined outside the component so React sees a stable component reference across renders.
+const Sep: React.FC = () => <Text color="gray">  │  </Text>;
+
 /** Single-line HUD summary — toggled on with the 'c' key. */
 const CompactBar: React.FC<CompactBarProps> = ({ data, identity, readTimeMs }) => {
   const ctx = data.tokens;
@@ -31,8 +34,6 @@ const CompactBar: React.FC<CompactBarProps> = ({ data, identity, readTimeMs }) =
   const elapsed = data.startedAt
     ? formatDuration(Date.now() - data.startedAt.getTime())
     : null;
-
-  const Sep = () => <Text color="gray">  │  </Text>;
 
   return (
     <Box flexDirection="row">
