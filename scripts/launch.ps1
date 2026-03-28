@@ -2,80 +2,82 @@
 <#
 .SYNOPSIS
     Universal Quasar HUD launcher for Windows Terminal.
-    Opens a split pane: HUD on top, AI CLI on bottom.
+    Opens a horizontal split in a new tab:
+        TOP pane  (small) → Quasar HUD live display
+        BOTTOM pane (large) → your AI CLI session
 
 .PARAMETER CLI
     Which AI CLI to launch: copilot | claude | codex
 
-.PARAMETER HUDRows
-    Height of the HUD pane in rows (default: 9)
+.PARAMETER HUDPercent
+    Percentage of the terminal height the HUD pane uses (default: 22).
 
 .PARAMETER Refresh
     HUD refresh interval in seconds (default: 2)
 
 .EXAMPLE
     .\launch.ps1 -CLI copilot
-    .\launch.ps1 -CLI codex -HUDRows 10
+    .\launch.ps1 -CLI claude -HUDPercent 25
 #>
 param(
     [Parameter(Mandatory)]
     [ValidateSet('copilot', 'claude', 'codex')]
     [string]$CLI,
 
-    [int]$HUDRows = 9,
+    [ValidateRange(10, 40)]
+    [int]$HUDPercent = 22,
 
+    [ValidateRange(1, 30)]
     [int]$Refresh = 2,
 
     [string]$WorkDir = (Get-Location).Path
 )
 
 $ScriptDir = $PSScriptRoot
-$ProjectDir = Split-Path $ScriptDir -Parent
+$HudRunner = Join-Path $ScriptDir 'hud-runner.ps1'
 
-# ── Resolve CLI command ───────────────────────────────────────────────────────
-$cliCmd = switch ($CLI) {
-    'copilot' { 'copilot' }
-    'claude'  { 'claude' }
-    'codex'   { 'codex' }
-}
+# The CLI pane gets the larger share; HUD is the remainder at the top.
+# wt split-pane --size is the fraction the NEW (bottom) pane receives.
+$cliPct = [math]::Round((100 - $HUDPercent) / 100.0, 2)
 
-# ── Resolve HUD command ───────────────────────────────────────────────────────
-$hudScript = Join-Path $ProjectDir 'src\index.tsx'
-$hudCmd    = "tsx `"$hudScript`" --cli=$CLI --refresh=$Refresh"
+$wt = Get-Command 'wt.exe' -ErrorAction SilentlyContinue
 
-# Try to use compiled dist if available
-$distIndex = Join-Path $ProjectDir 'dist\index.js'
-if (Test-Path $distIndex) {
-    $hudCmd = "node `"$distIndex`" --cli=$CLI --refresh=$Refresh"
-}
+if ($wt) {
+    # Build Windows Terminal command string.
+    #
+    # Strategy:
+    #   new-tab  → opens a fresh tab; the first pane runs the HUD (top)
+    #   ; split-pane --horizontal --size $cliPct
+    #              → splits below the HUD; CLI runs in the larger bottom pane
+    #
+    # We use -File instead of -Command for the HUD pane to avoid inner-quote
+    # escaping issues with paths that contain spaces.
 
-# ── Set QHUD_CLI env for the HUD process ─────────────────────────────────────
-$env:QHUD_CLI = $CLI
-
-# ── Launch in Windows Terminal ────────────────────────────────────────────────
-$wtAvailable = Get-Command 'wt' -ErrorAction SilentlyContinue
-
-if ($wtAvailable) {
-    # Split pane: top pane = HUD, bottom pane = AI CLI
-    $wtArgs = @(
-        '--window', '0',
-        'new-tab', '--title', "Quasar HUD — $CLI", '--startingDirectory', $WorkDir,
-        'split-pane', '--horizontal', '--size', (1.0 - ($HUDRows / 40)),
-        '--', 'pwsh', '-NoExit', '-Command', $hudCmd,
-        ';', 'focus-pane', '--target', '0',
-        ';', 'move-pane', '--direction', 'up',
-        ';', 'split-pane', '--target', '0', '--horizontal',
-        '--', 'pwsh', '-NoExit', '-Command', "Set-Location '$WorkDir'; $cliCmd"
+    $wtArgs = (
+        "--window 0 " +
+        "new-tab " +
+            "--title `"Quasar HUD — $CLI`" " +
+            "--startingDirectory `"$WorkDir`" " +
+            "-- pwsh -NoExit -File `"$HudRunner`" -CLI $CLI -Refresh $Refresh " +
+        "; split-pane " +
+            "--horizontal " +
+            "--size $cliPct " +
+            "--startingDirectory `"$WorkDir`" " +
+            "-- pwsh -NoExit -Command $CLI"
     )
-    Write-Host "Launching Quasar HUD + $CLI in Windows Terminal…" -ForegroundColor Cyan
-    Start-Process 'wt' -ArgumentList $wtArgs
-} else {
-    # Fallback: open two separate windows
-    Write-Host "Windows Terminal (wt) not found — opening separate windows." -ForegroundColor Yellow
-    Write-Host "HUD:  $hudCmd"
-    Write-Host "CLI:  $cliCmd"
 
-    Start-Process 'pwsh' -ArgumentList "-NoExit", "-Command", $hudCmd
+    Write-Host "▶  Launching Quasar HUD in Windows Terminal…" -ForegroundColor Cyan
+    Write-Host "   HUD: top $HUDPercent%   $CLI`: bottom $([math]::Round(100 - $HUDPercent))%" -ForegroundColor Gray
+    Start-Process 'wt.exe' -ArgumentList $wtArgs
+
+} else {
+    # Fallback: no Windows Terminal — open HUD in a separate pwsh window, then
+    # run the CLI in the current terminal so the user can still use both.
+    Write-Host "⚠  Windows Terminal (wt.exe) not found — opening HUD in a separate window." -ForegroundColor Yellow
+    Write-Host "   Install Windows Terminal from the Microsoft Store for the best experience." -ForegroundColor Gray
+
+    Start-Process 'pwsh' -ArgumentList "-NoExit -File `"$HudRunner`" -CLI $CLI -Refresh $Refresh"
     Start-Sleep -Seconds 1
-    Start-Process 'pwsh' -ArgumentList "-NoExit", "-Command", "Set-Location '$WorkDir'; $cliCmd"
+    & $CLI
 }
+

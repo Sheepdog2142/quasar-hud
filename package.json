@@ -7,12 +7,15 @@
     "qhud": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
     "dev": "ts-node --transpile-only src/index.tsx",
+    "build": "tsc",
     "start": "node dist/index.js",
-    "launch:copilot": "ts-node --transpile-only src/index.tsx -- --cli=copilot",
-    "launch:claude": "ts-node --transpile-only src/index.tsx -- --cli=claude",
-    "launch:codex": "ts-node --transpile-only src/index.tsx -- --cli=codex",
+    "launch:copilot": "pwsh -NonInteractive -File scripts\\launch-copilot.ps1",
+    "launch:claude": "pwsh -NonInteractive -File scripts\\launch-claude.ps1",
+    "launch:codex": "pwsh -NonInteractive -File scripts\\launch-codex.ps1",
+    "launch:inline:copilot": "ts-node --transpile-only src/index.tsx -- --cli=copilot",
+    "launch:inline:claude": "ts-node --transpile-only src/index.tsx -- --cli=claude",
+    "launch:inline:codex": "ts-node --transpile-only src/index.tsx -- --cli=codex",
     "setup": "ts-node --transpile-only src/setup.ts"
   },
   "dependencies": {
