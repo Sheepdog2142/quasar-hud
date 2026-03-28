@@ -130,7 +130,7 @@ function readMonthlyRequests(): RequestsInfo {
       const events = readJsonLines<{ type: string; timestamp?: string }>(eventsPath);
       for (const evt of events) {
         if (evt.type !== 'user.message') continue;
-        if (!evt.timestamp) { totalRequests++; continue; }
+        if (!evt.timestamp) continue;  // skip events with missing timestamps to avoid false counts
         const ts = new Date(evt.timestamp);
         if (!isNaN(ts.getTime()) && ts >= periodStart) totalRequests++;
       }

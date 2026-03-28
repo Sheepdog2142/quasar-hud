@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text } from 'ink';
 import { readCopilotSession } from '../readers/copilot';
 import { readClaudeSession }  from '../readers/claude';
@@ -29,22 +29,51 @@ function readSession(config: HUDConfig): SessionData {
 }
 
 const App: React.FC<AppProps> = ({ config }) => {
-  const [data, setData] = useState<SessionData>(() => readSession(config));
+  const [data, setData] = useState<SessionData>(() => {
+    const t0 = Date.now();
+    const d = readSession(config);
+    return { ...d, readTimeMs: Date.now() - t0 };
+  });
+  // Track adaptive interval: if reads are slow, back off to avoid 100% CPU.
+  const adaptiveInterval = useRef(config.refreshIntervalMs);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setData(readSession(config));
-    }, config.refreshIntervalMs);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout>;
+
+    const tick = () => {
+      const t0 = Date.now();
+      const next = readSession(config);
+      const elapsed = Date.now() - t0;
+      setData({ ...next, readTimeMs: elapsed });
+
+      // If the read took more than half the nominal interval, back off to 3× the
+      // read time (min: nominal interval) so we never spin at 100% CPU.
+      const nominal = config.refreshIntervalMs;
+      adaptiveInterval.current = elapsed * 2 > nominal
+        ? Math.max(nominal, elapsed * 3)
+        : nominal;
+
+      timer = setTimeout(tick, adaptiveInterval.current);
+    };
+
+    timer = setTimeout(tick, adaptiveInterval.current);
+    return () => clearTimeout(timer);
   }, [config]);
+
+  const readMs = data.readTimeMs ?? 0;
+  const isSlowRead = readMs > config.refreshIntervalMs / 2;
 
   return (
     <Box flexDirection="column">
       <StatusBar data={data} config={config} />
-      <Text color="gray" dimColor>
-        {' '}Last refresh: {data.lastUpdated.toLocaleTimeString()}
-        {'  ·  '}Press Ctrl+C to exit HUD
-      </Text>
+      <Box>
+        <Text color="gray" dimColor>
+          {' '}Last refresh: {data.lastUpdated.toLocaleTimeString()}
+          {'  ·  '}{readMs}ms read
+          {isSlowRead ? `  ·  interval backed off to ${adaptiveInterval.current}ms` : ''}
+          {'  ·  '}Press Ctrl+C to exit HUD
+        </Text>
+      </Box>
     </Box>
   );
 };

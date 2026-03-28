@@ -92,13 +92,16 @@ export function readClaudeWeeklyUsage(days = 7): WeeklyUsage {
       try { files = fs.readdirSync(dir).filter(f => f.endsWith('.jsonl')); }
       catch { continue; }
 
+      // Count sessions at the project-directory level, not per-file.
+      // A single project may have multiple JSONL files (history splits, etc.)
+      let projectHadTokens = false;
+
       for (const file of files) {
         const filePath = path.join(dir, file);
         // Skip files not modified in the window (fast path)
         try { if (fs.statSync(filePath).mtimeMs < cutoff) continue; }
         catch { continue; }
 
-        let sessionHadTokens = false;
         const lines = readJsonLines<ClaudeAssistantEvent>(filePath);
         for (const line of lines) {
           if (line.type !== 'assistant') continue;
@@ -110,11 +113,13 @@ export function readClaudeWeeklyUsage(days = 7): WeeklyUsage {
           totalTokens +=
             (u.input_tokens ?? 0) +
             (u.output_tokens ?? 0) +
-            (u.cache_creation_input_tokens ?? 0);
-          sessionHadTokens = true;
+            (u.cache_creation_input_tokens ?? 0) +
+            (u.cache_read_input_tokens ?? 0);  // include cache reads (charged at ~10%)
+          projectHadTokens = true;
         }
-        if (sessionHadTokens) sessionCount++;
       }
+
+      if (projectHadTokens) sessionCount++;
     }
   } catch { /* non-fatal */ }
 
@@ -158,7 +163,12 @@ export function readClaudeSession(): SessionData {
 
       const lines = readJsonLines<Record<string, unknown>>(path.join(projectDir, latestFile));
       let turnCount = 0;
-      let tokensUsed = 0;
+      // Track the most recent assistant turn's token usage.
+      // input_tokens on an assistant event = total context sent to the model on that turn,
+      // which is the best approximation of the current context window size.
+      let lastInputTokens = 0;
+      let lastOutputTokens = 0;
+      let lastCacheReadTokens = 0;
       let model: string | undefined;
 
       for (const line of lines) {
@@ -168,12 +178,19 @@ export function readClaudeSession(): SessionData {
           if (msg?.['model'] && !model) model = String(msg['model']);
           const usage = msg?.['usage'] as Record<string, unknown> | undefined;
           if (usage) {
-            tokensUsed += (usage['input_tokens'] as number ?? 0);
-            tokensUsed += (usage['output_tokens'] as number ?? 0);
-            tokensUsed += (usage['cache_creation_input_tokens'] as number ?? 0);
+            const inp = (usage['input_tokens'] as number ?? 0);
+            if (inp > 0) {
+              lastInputTokens     = inp;
+              lastOutputTokens    = (usage['output_tokens'] as number ?? 0);
+              lastCacheReadTokens = (usage['cache_read_input_tokens'] as number ?? 0);
+            }
           }
         }
       }
+
+      // Current context = what was sent to the model on the last turn (uncached + cached input)
+      // plus the output it generated (which is now also in context).
+      const tokensUsed = lastInputTokens + lastCacheReadTokens + lastOutputTokens;
 
       base.turnCount = turnCount;
       if (model) base.model = model;

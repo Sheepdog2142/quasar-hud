@@ -26,8 +26,13 @@ export const MODEL_TOKEN_LIMITS: Record<string, number> = {
 export function tokenLimitForModel(model?: string): number {
   if (!model) return MODEL_TOKEN_LIMITS['default'];
   const m = model.toLowerCase();
-  for (const [key, limit] of Object.entries(MODEL_TOKEN_LIMITS)) {
-    if (key !== 'default' && m.includes(key)) return limit;
+  // Sort by key length descending so more-specific keys (e.g. 'gpt-4o') match
+  // before shorter overlapping keys (e.g. 'gpt-4').
+  const keys = Object.keys(MODEL_TOKEN_LIMITS)
+    .filter(k => k !== 'default')
+    .sort((a, b) => b.length - a.length);
+  for (const key of keys) {
+    if (m.includes(key)) return MODEL_TOKEN_LIMITS[key]!;
   }
   return MODEL_TOKEN_LIMITS['default'];
 }

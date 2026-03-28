@@ -97,6 +97,8 @@ export interface SessionData {
 
   /** Timestamp of last successful read */
   lastUpdated: Date;
+  /** How long the last readSession() call took in milliseconds */
+  readTimeMs?: number;
   /** Non-fatal warning or parse note for the HUD footer */
   notice?: string;
 }
