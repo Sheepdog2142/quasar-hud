@@ -45,6 +45,9 @@ interface WorkspaceYaml {
   summary_count?: number;
   created_at?: string;
   updated_at?: string;
+  /** CLI mode hint stored by some Copilot versions (e.g. 'plan', 'autopilot') */
+  mode?: string;
+  type?: string;
 }
 
 // ─── MCP config shape ────────────────────────────────────────────────────────
@@ -156,7 +159,7 @@ export function readCopilotSession(): SessionData {
   const sessionDir = findActiveSessionDir();
   if (!sessionDir) return { ...base, notice: 'No active Copilot session found' };
 
-  // workspace.yaml → session identity
+  // workspace.yaml → session identity + mode hint
   const workspace = readYaml<WorkspaceYaml>(path.join(sessionDir, 'workspace.yaml'));
   if (workspace) {
     base.sessionId   = workspace.id;
@@ -164,15 +167,19 @@ export function readCopilotSession(): SessionData {
     base.workingDir  = workspace.cwd;
     base.startedAt   = workspace.created_at ? new Date(workspace.created_at) : undefined;
     if (workspace.cwd) base.gitBranch = readGitBranch(workspace.cwd);
+    // Some Copilot versions store the mode in workspace.yaml
+    const rawMode = (workspace.mode ?? workspace.type ?? '').toLowerCase();
+    if (rawMode.includes('plan'))      base.mode = 'plan';
+    else if (rawMode.includes('auto')) base.mode = 'autopilot';
   }
 
-  // events.jsonl → tokens + model + turn count
+  // events.jsonl → tokens + model + turn count + mode detection
   const events = readJsonLines<CopilotEvent>(path.join(sessionDir, 'events.jsonl'));
 
   let outputTokensTotal = 0;
   let turnCount = 0;
   let model: string | undefined;
-  let mode: CLIMode = 'interactive';
+  let mode: CLIMode = base.mode ?? 'interactive';
 
   for (const evt of events) {
     if (evt.type === 'session.start') {
@@ -183,7 +190,6 @@ export function readCopilotSession(): SessionData {
       outputTokensTotal += e.data.outputTokens ?? 0;
       if (e.data.model && !model) model = e.data.model;
     } else if (evt.type === 'tool.execution_complete') {
-      // model appears in tool completion events in some Copilot versions
       const e = evt as { type: string; data: { model?: string } };
       if (e.data.model && !model) model = e.data.model;
     } else if (evt.type === 'assistant.turn_start') {
@@ -191,6 +197,16 @@ export function readCopilotSession(): SessionData {
       if (e.data.model && !model) model = e.data.model;
     } else if (evt.type === 'user.message') {
       turnCount++;
+    } else {
+      // Detect plan / autopilot mode from event type prefixes
+      const t = evt.type.toLowerCase();
+      if (mode === 'interactive') {
+        if (t.startsWith('plan.') || t === 'plan_created' || t === 'plan_started') {
+          mode = 'plan';
+        } else if (t.startsWith('autopilot.') || t.startsWith('agent.') || t.startsWith('autonomous.')) {
+          mode = 'autopilot';
+        }
+      }
     }
   }
 

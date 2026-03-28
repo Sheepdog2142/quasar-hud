@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import type { HUDConfig, CostEstimate } from './types';
+import type { HUDConfig, CostEstimate, CLIName } from './types';
 
 export const HOME = os.homedir();
 
@@ -49,6 +49,16 @@ export const DEFAULT_CONFIG: HUDConfig = {
   showRequests:     true,
   showWeeklyUsage:  true,
 };
+
+/** Returns filesystem paths the HUD should watch for live changes (for chokidar). */
+export function getWatchPaths(cli: CLIName): string[] {
+  switch (cli) {
+    case 'copilot': return [path.join(CLI_DIRS.copilot, 'session-state')];
+    case 'claude':  return [path.join(CLI_DIRS.claude,  'projects')];
+    case 'codex':   return [CLI_DIRS.codex];
+    default:        return [];
+  }
+}
 
 // ─── Per-feature env-var limits ───────────────────────────────────────────────
 
