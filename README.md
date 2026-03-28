@@ -2,7 +2,8 @@
 
 A persistent terminal HUD that sits at the top of your Windows Terminal (or tmux) pane and shows live session stats for whichever AI coding CLI you're running — **GitHub Copilot CLI**, **Claude Code**, or **Codex CLI**.
 
-```
+```<img width="996" height="208" alt="QuasarHud" src="https://github.com/user-attachments/assets/98596326-f7da-4b9f-ae6d-5992ce7ac830" />
+
 ╭────────────────────────────────────────────────────────────────────────────╮
 │  ⬡  GitHub Copilot CLI  │  fix-auth-bug  │  claude-sonnet-4.6  │  plan    │
 │  Context  [██████████████████░░░░░░░░░░░░]  85.4k / 200k  (42%)           │
