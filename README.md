@@ -1,5 +1,9 @@
 # Quasar HUD 🛸
 
+<p align="center">
+  <img src="images/QuasarHud.png" alt="Quasar HUD screenshot" width="700" />
+</p>
+
 A persistent terminal HUD that sits at the top of your Windows Terminal (or tmux) pane and shows live session stats for whichever AI coding CLI you're running — **GitHub Copilot CLI**, **Claude Code**, or **Codex CLI**.
 
 ```<img width="996" height="208" alt="QuasarHud" src="https://github.com/user-attachments/assets/98596326-f7da-4b9f-ae6d-5992ce7ac830" />
@@ -50,25 +54,39 @@ A persistent terminal HUD that sits at the top of your Windows Terminal (or tmux
 - Windows Terminal (`wt`) **or** tmux (Linux/macOS)
 - The target AI CLI installed and on `PATH`
 
-## Getting started
+## Install
+
+**Windows** — paste into any PowerShell terminal:
 
 ```powershell
-# 1. Install dependencies
-cd "quasar-hud"
-npm install
-
-# 2. Launch with your CLI of choice
-.\scripts\launch-copilot.ps1   # or launch-claude.ps1 / launch-codex.ps1
-
-# 3. Or run the HUD standalone (e.g. in an existing split pane)
-npx ts-node --transpile-only src/index.tsx --cli=copilot
+iex (irm https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/main/install.ps1)
 ```
 
-### Unix / macOS
+**macOS / Linux:**
 
 ```bash
-chmod +x scripts/launch.sh
-./scripts/launch.sh copilot      # opens a tmux session
+curl -fsSL https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/main/install.sh | bash
+```
+
+The installer checks your Node.js version, installs Quasar HUD globally, and prints the next steps.
+
+### First-time setup
+
+After install, wire the HUD into your shell so it launches automatically:
+
+```powershell
+qhud-setup enable --cli=copilot   # GitHub Copilot
+qhud-setup enable --cli=claude    # Claude Code
+qhud-setup enable --cli=codex     # Codex CLI
+qhud-setup enable --cli=all       # all three at once
+```
+
+Then reload your shell profile and just type `copilot`, `claude`, or `codex` — the HUD opens in a split pane automatically.
+
+### Run manually
+
+```powershell
+qhud --cli=copilot
 ```
 
 ## CLI arguments
@@ -98,16 +116,16 @@ Make the HUD open automatically every time you start a CLI:
 
 ```powershell
 # Enable for one CLI
-npm run setup -- enable --cli=copilot
+qhud-setup enable --cli=copilot
 
 # Enable for all three
-npm run setup -- enable --cli=all
+qhud-setup enable --cli=all
 
 # Check status
-npm run setup -- status
+qhud-setup status
 
 # Disable
-npm run setup -- disable --cli=claude
+qhud-setup disable --cli=claude
 ```
 
 This injects a shell wrapper into your `$PROFILE` (PowerShell) or `~/.bashrc`/`~/.zshrc`:
@@ -161,3 +179,9 @@ The HUD polls this file and displays the savings in the MCP row.
 ```powershell
 npm run build   # compiles to dist/
 ```
+
+## License
+
+© 2025 [Quasar Digital](https://quasardigital.co) · Made by [Sheepdog2142](https://github.com/Sheepdog2142)
+
+Free to download and use. Modification and resale are not permitted. See [LICENSE](LICENSE) for full terms.
