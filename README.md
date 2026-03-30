@@ -59,13 +59,13 @@ A persistent terminal HUD that sits at the top of your Windows Terminal (or tmux
 **Windows** — paste into any PowerShell terminal:
 
 ```powershell
-iex (irm https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/main/install.ps1)
+iex (irm https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/master/install.ps1)
 ```
 
 **macOS / Linux:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Sheepdog2142/quasar-hud/master/install.sh | bash
 ```
 
 The installer checks your Node.js version, installs Quasar HUD globally, and prints the next steps.
