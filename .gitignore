@@ -1,4 +1,4 @@
 node_modules/
-dist/
+# dist/ is committed so npm install -g works without a build step
 *.js.map
 .env
